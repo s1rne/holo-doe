@@ -1,4 +1,5 @@
-"""Тестовые наборы по 4 изображения 128×128: полутоновые фотографии и бинарные символы."""
+"""Тестовые наборы по 4 изображения 128×128: полутоновые фотографии, бинарные символы и
+дополнительные снимки другого происхождения (кот, ракета, Луна, микроскопия клетки)."""
 
 from pathlib import Path
 
@@ -30,6 +31,7 @@ def main() -> None:
     sets = {
         "photos": {"1_camera": data.camera(), "2_astronaut": data.astronaut(), "3_coffee": data.coffee(), "4_coins": data.coins()},
         "glyphs": {f"{i}_{c}": None for i, c in enumerate("ЛАЗР", 1)},
+        "extra": {"1_chelsea": data.chelsea(), "2_rocket": data.rocket(), "3_moon": data.moon(), "4_cell": data.cell()},
     }
     for name, images in sets.items():
         folder = ROOT / name
