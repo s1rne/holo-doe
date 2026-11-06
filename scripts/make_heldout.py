@@ -23,9 +23,12 @@ FONT = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
 
 
 def stretch(image: np.ndarray) -> np.ndarray:
+    """В оттенки серого, к размеру 128×128 и на весь диапазон 0..255."""
     image = np.asarray(image, dtype=np.float64)
     if image.ndim == 3:
         image = image[..., :3] @ np.array([0.299, 0.587, 0.114])
+    if image.shape != (128, 128):
+        image = transform.resize(image, (128, 128), anti_aliasing=True)
     image = (image - image.min()) / max(image.max() - image.min(), 1e-12)
     return np.round(image * 255).astype(np.uint8)
 
@@ -52,8 +55,7 @@ def main() -> None:
 
     photo = stretch(data.astronaut())
     offsets = [(0, 0), (24, 0), (0, 24), (24, 24)]
-    save_set("similar_photos", [stretch(transform.resize(photo[y:y + 360, x:x + 360], (128, 128), anti_aliasing=True))
-                                for x, y in offsets])
+    save_set("similar_photos", [stretch(photo[y:y + 360, x:x + 360]) for x, y in offsets])
 
     rng = np.random.default_rng(0)
     dots = np.zeros((128, 128), dtype=np.uint8)
