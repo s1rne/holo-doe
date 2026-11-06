@@ -27,13 +27,13 @@ class LearnedOptimizer(nn.Module):
         nn.init.zeros_(self.net[-1].weight)
         nn.init.zeros_(self.net[-1].bias)
         self.steps = steps
-        self.gain = nn.Parameter(torch.full((steps,), 0.5))
+        self.gain = nn.Parameter(torch.full((steps,), 1.0))
 
     def features(self, phase, targets, chirps, objective):
         with torch.enable_grad():
             probe = phase.detach().requires_grad_()
             grad = torch.autograd.grad(objective(probe, chirps, targets).sum(), probe)[0]
-        grad = grad / grad.flatten(-2).std(-1)[..., None, None].clamp_min(1e-12)
+        grad = torch.nan_to_num(grad / grad.flatten(-2).std(-1)[..., None, None].clamp_min(1e-9)).clamp(-5, 5)
         field = propagate(phase, chirps)
         amplitude = targets.sqrt()
         scale = field.abs().mean((-2, -1), keepdim=True) / amplitude.mean((-2, -1), keepdim=True).clamp_min(1e-6)
@@ -49,6 +49,6 @@ class LearnedOptimizer(nn.Module):
         history = []
         for k in range(steps or self.steps):
             x = torch.cat([self.features(phase, targets, chirps, objective), targets], 1)
-            phase = phase + self.gain[min(k, self.steps - 1)] * self.net(x)[:, 0]
+            phase = phase + self.gain[min(k, self.steps - 1)] * torch.tanh(self.net(x)[:, 0])
             history.append(phase)
         return history
