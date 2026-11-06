@@ -36,12 +36,14 @@ class LearnedOptimizer(nn.Module):
         grad = torch.nan_to_num(grad / grad.flatten(-2).std(-1)[..., None, None].clamp_min(1e-9)).clamp(-5, 5)
         field = propagate(phase, chirps)
         amplitude = targets
-        scale = field.abs().mean((-2, -1), keepdim=True) / amplitude.mean((-2, -1), keepdim=True).clamp_min(1e-6)
+        scale = field.abs().mean((-2, -1), keepdim=True) / amplitude.mean((-2, -1), keepdim=True).clamp_min(1e-3)
         back = back_propagate(torch.polar(amplitude * scale, field.angle()), chirps).sum(-3)
         turn = back * torch.polar(torch.ones_like(phase), -phase)
-        weight = back.abs() / back.abs().mean((-2, -1), keepdim=True)
-        return torch.stack([phase.cos(), phase.sin(), grad, turn.real / back.abs().clamp_min(1e-9),
-                            turn.imag / back.abs().clamp_min(1e-9), weight, field.abs().pow(2).mean(-3)], 1)
+        magnitude = back.abs().clamp_min(1e-6)
+        weight = magnitude / magnitude.mean((-2, -1), keepdim=True)
+        features = torch.stack([phase.cos(), phase.sin(), grad, turn.real / magnitude, turn.imag / magnitude,
+                                weight, field.abs().mean(-3)], 1)
+        return torch.nan_to_num(features).clamp(-10, 10)
 
     def forward(self, phase: torch.Tensor, targets: torch.Tensor, chirps: torch.Tensor,
                 objective: Objective = Objective(quantize=False), steps: int | None = None) -> list[torch.Tensor]:

@@ -29,7 +29,7 @@ def main() -> None:
     model = LearnedOptimizer(args.steps).to(dev)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, args.iterations)
-    objective = Objective(quantize=False, peak_power=16)
+    objective = Objective(quantize=False)
     weights = torch.linspace(0.1, 1, args.steps, device=dev)
     start = time.perf_counter()
     for it in range(args.iterations):
@@ -40,8 +40,9 @@ def main() -> None:
         loss = (weights * losses).sum() / weights.sum()
         opt.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        opt.step()
+        norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        if norm.isfinite():
+            opt.step()
         sched.step()
         if it % 50 == 0:
             print(f"{it:5d} final {losses[-1].item():.4f} first {losses[0].item():.4f} {time.perf_counter() - start:6.0f} с", flush=True)

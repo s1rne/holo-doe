@@ -57,6 +57,6 @@ def single_plane_ceiling(targets: np.ndarray, steps: int = 3000) -> dict:
     recon = []
     for i in range(4):
         phase = fit(PhaseField(torch.zeros(1, setup.size, setup.size)), images[i:i + 1], chirps[i:i + 1],
-                    Objective(peak_power=16), Schedule(steps, 0.5, quantize_from=0.5)).phase
+                    Objective(), Schedule(steps, 0.3, quantize_from=0.5)).phase
         recon.append(evaluate(phase, targets[i:i + 1], Setup(distances=(setup.distances[i],)))[1][0])
     return report(targets, np.stack(recon))

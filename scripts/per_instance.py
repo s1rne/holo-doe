@@ -19,6 +19,7 @@ from holo.optimize import Schedule, device, fit
 from holo.pretrain import smooth_target_fit
 
 EXACT = Objective(peak_power=16)
+PLAIN = Objective()
 
 
 def restarts(count: int, seed: int = 0) -> torch.Tensor:
@@ -37,9 +38,9 @@ def learned(checkpoint: Path, finetune: int):
         model = model.to(device()).eval()
         with torch.no_grad():
             phase = model(restarts(1).float().to(device()), t.float()[None].to(device()), c.to(torch.complex64).to(device()),
-                          Objective(quantize=False, peak_power=16))[-1].cpu()
+                          Objective(quantize=False))[-1].cpu()
         if finetune:
-            phase = fit(PhaseField(phase), t, c, EXACT, Schedule(finetune, 0.5, quantize_from=0.5)).phase
+            phase = fit(PhaseField(phase), t, c, PLAIN, Schedule(finetune, 0.5, quantize_from=0.5)).phase
         return phase.reshape(128, 128)
     return run
 
@@ -49,6 +50,15 @@ def smooth(scale: int = 4, pre: int = 3000, steps: int = 3000, lr: float = 0.1, 
         init = smooth_target_fit(t, c, scale, pre)[None]
         return fit(PhaseField(init), t, c, objective, Schedule(steps, lr, quantize_from=0.5)).phase
     return run
+
+
+def best_of_both(t, c):
+    """Рецепт по умолчанию: случайный старт и старт с гладкой фазой, выбор по той же потере.
+    На бинарных изображениях выигрывает второй, на полутоновых первый."""
+    plain = fit(PhaseField(restarts(1)), t, c, PLAIN, Schedule(3000, 0.3, quantize_from=0.5))
+    smooth_init = smooth_target_fit(t, c, 4, 3000)[None]
+    smoothed = fit(PhaseField(smooth_init), t, c, PLAIN, Schedule(3000, 0.1, quantize_from=0.5))
+    return (plain if plain.loss <= smoothed.loss else smoothed).phase
 
 
 METHODS = {
@@ -61,14 +71,15 @@ METHODS = {
     "gd-exact 10k ×8 рестартов": gd(10000, count=8),
     "gs50 + gd-exact 3k": lambda t, c: fit(PhaseField(gerchberg_saxton(t, c, 50)[None]), t, c, EXACT,
                                            Schedule(3000, 0.3, quantize_from=0.5)).phase,
-    "gd-exact 3k, мягкий минимум": gd(3000, Objective(peak_power=16, softmin=0.05)),
-    "gd-exact 3k, без квантования": gd(3000, Objective(peak_power=16, quantize=False)),
-    "gd-exact 3k, без мягкого пика": gd(3000, Objective()),
-    "gd-exact 3k, затемнение 2": gd(3000, Objective(peak_power=16, dim_weight=2.0)),
-    "gd-exact 3k, |K| и |K|²": gd(3000, Objective(peak_power=16, modes=("amplitude", "intensity"))),
+    "gd-exact 3k, мягкий минимум": gd(3000, Objective(softmin=0.05)),
+    "gd-exact 3k, без квантования": gd(3000, Objective(quantize=False)),
+    "gd-exact 3k, без мягкого пика": gd(3000, PLAIN),
+    "gd-exact 3k, затемнение 2": gd(3000, Objective(dim_weight=2.0)),
+    "gd-exact 3k, |K| и |K|²": gd(3000, Objective(modes=("amplitude", "intensity"))),
     "гладкая фаза + gd-exact 1k": smooth(steps=1000),
     "гладкая фаза + gd-exact 3k": smooth(),
-    "гладкая фаза + gd-exact 3k, затемнение 2": smooth(objective=Objective(peak_power=16, dim_weight=2.0)),
+    "гладкая фаза + gd-exact 3k, затемнение 2": smooth(objective=Objective(dim_weight=2.0)),
+    "лучшее из двух (рецепт)": best_of_both,
     "complex-field 3k": lambda t, c: fit(ComplexField(restarts(1)), t, c, EXACT, Schedule(3000, 0.2, quantize_from=0.5)).phase,
     "dip-noise 3k": lambda t, c: fit(DeepPrior(torch.randn(1, 32, 128, 128, generator=torch.Generator().manual_seed(0))),
                                      t, c, EXACT, Schedule(3000, 1e-3, quantize_from=0.5)).phase,

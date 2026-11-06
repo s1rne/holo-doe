@@ -37,13 +37,19 @@ class TrainScenes:
         self.pool = [gray(getattr(data, name)()) for name in TRAIN_IMAGES]
 
     def crop(self) -> np.ndarray:
-        image = self.pool[self.rng.integers(len(self.pool))]
-        side = int(self.rng.integers(128, min(image.shape) + 1))
-        y, x = (self.rng.integers(0, s - side + 1) for s in image.shape)
-        patch = Image.fromarray(image[y:y + side, x:x + side]).resize((128, 128), Image.BILINEAR)
-        patch = np.rot90(np.asarray(patch), self.rng.integers(4))
-        patch = (patch - patch.min()) / max(patch.max() - patch.min(), 1e-12)
-        return np.round(patch * 255) / 255
+        """Кроп с поворотом и растяжкой контраста. Почти однородные куски отбрасываются:
+        у них нулевая дисперсия, и метрики на них не определены."""
+        for _ in range(10):
+            image = self.pool[self.rng.integers(len(self.pool))]
+            side = int(self.rng.integers(128, min(image.shape) + 1))
+            y, x = (self.rng.integers(0, s - side + 1) for s in image.shape)
+            patch = Image.fromarray(image[y:y + side, x:x + side]).resize((128, 128), Image.BILINEAR)
+            patch = np.rot90(np.asarray(patch), self.rng.integers(4))
+            if patch.max() - patch.min() < 0.2 or patch.std() < 0.02:
+                continue
+            patch = (patch - patch.min()) / (patch.max() - patch.min())
+            return np.round(patch * 255) / 255
+        return np.round(np.asarray(patch) * 255) / 255
 
     def scene(self) -> np.ndarray:
         if self.rng.random() < 0.5:
