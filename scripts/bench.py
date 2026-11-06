@@ -121,7 +121,7 @@ def main() -> None:
     if model is not None:
         synthesize(model, warm, chirps, "fast", 2, 1)
     synchronize(dev)
-    rows = []
+    sink = (args.out / f"{args.tag}.jsonl").open("a")
     for folder in args.targets:
         names, images = load_targets(folder)
         targets = torch.from_numpy(images).float().to(dev) / 255
@@ -135,16 +135,15 @@ def main() -> None:
             row = {"set": folder.name, "method": method, "cc": metrics["cc_mean"], "ssim": metrics["ssim_mean"],
                    "cc_min": min(metrics["cc"]), "ssim_min": min(metrics["ssim"]),
                    "brightness": brightness(recon, images), "seconds": seconds}
-            rows.append(row)
+            sink.write(json.dumps(row, ensure_ascii=False) + "\n")
+            sink.flush()
             if args.save_images:
                 slug = method.replace(" ", "_").replace("×", "x").replace("+", "_")
                 save(args.out / args.tag / folder.name / slug, names, code, recon, metrics,
                      {"method": method, "seconds": seconds})
             print(f"| {row['set']} | {method} | {row['cc']:.3f} | {row['ssim']:.3f} | {row['cc'] + row['ssim']:.3f} | "
                   f"{row['cc_min']:.3f} | {row['ssim_min']:.3f} | {row['brightness']:.2f} | {seconds:.2f} |", flush=True)
-    with (args.out / f"{args.tag}.jsonl").open("a") as f:
-        for row in rows:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    sink.close()
 
 
 if __name__ == "__main__":
