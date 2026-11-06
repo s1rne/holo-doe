@@ -35,7 +35,7 @@ class LearnedOptimizer(nn.Module):
             grad = torch.autograd.grad(objective(probe, chirps, targets).sum(), probe)[0]
         grad = torch.nan_to_num(grad / grad.flatten(-2).std(-1)[..., None, None].clamp_min(1e-9)).clamp(-5, 5)
         field = propagate(phase, chirps)
-        amplitude = targets.sqrt()
+        amplitude = targets
         scale = field.abs().mean((-2, -1), keepdim=True) / amplitude.mean((-2, -1), keepdim=True).clamp_min(1e-6)
         back = back_propagate(torch.polar(amplitude * scale, field.angle()), chirps).sum(-3)
         turn = back * torch.polar(torch.ones_like(phase), -phase)

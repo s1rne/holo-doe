@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import torch
 
 from .losses import pearson, ssim
-from .optics import propagate, to_unit
+from .optics import reconstruct as optics_reconstruct, to_unit
 
 
 def ste_round(x: torch.Tensor) -> torch.Tensor:
@@ -32,13 +32,13 @@ def normalize(image: torch.Tensor, power: float = 0.0) -> torch.Tensor:
     return image / soft.clamp_min(1e-12)
 
 
-def reconstruct(phase: torch.Tensor, chirps: torch.Tensor, mode: str = "intensity", quantize: bool = True,
+def reconstruct(phase: torch.Tensor, chirps: torch.Tensor, mode: str = "amplitude", quantize: bool = True,
                 power: float = 0.0) -> torch.Tensor:
-    """Восстановление в 0..1 так, как оно попадает в PNG. mode: intensity |K|² или amplitude |K|."""
+    """Восстановление в 0..1 так, как оно попадает в PNG: нормировка по максимуму и округление
+    до 8 бит. mode: amplitude |K| (как в проверке) или intensity |K|²."""
     if quantize:
         phase = quantize_phase(phase)
-    field = propagate(phase, chirps).abs()
-    unit = normalize(field**2 if mode == "intensity" else field, power)
+    unit = normalize(optics_reconstruct(phase, chirps, mode), power)
     return ste_round(unit * 255) / 255 if quantize else unit
 
 
@@ -46,25 +46,31 @@ def reconstruct(phase: torch.Tensor, chirps: torch.Tensor, mode: str = "intensit
 class Objective:
     """ssim_weight: вес SSIM относительно CC; softmin: температура мягкого минимума по плоскостям
     (0 = среднее); modes: определения восстановления, по которым усредняется потеря;
-    peak_power: степень мягкого максимума для градиента нормировки (0 = жёсткий максимум)."""
+    peak_power: степень мягкого максимума для градиента нормировки (0 = жёсткий максимум);
+    dim_weight: вес штрафа за среднюю яркость восстановления после нормировки. Нормировка делит
+    на максимум, поэтому штраф выгоняет энергию в яркий пик, а фон опускается ниже половины
+    младшего разряда и округляется в ноль. Это главный рычаг ИСС при сравнении по амплитуде."""
 
     ssim_weight: float = 1.0
     softmin: float = 0.0
     quantize: bool = True
-    modes: tuple[str, ...] = ("intensity",)
+    modes: tuple[str, ...] = ("amplitude",)
     peak_power: float = 0.0
+    dim_weight: float = 0.0
 
-    def scores(self, phase: torch.Tensor, chirps: torch.Tensor, targets: torch.Tensor, mode: str = "intensity"):
+    def scores(self, phase: torch.Tensor, chirps: torch.Tensor, targets: torch.Tensor, mode: str = "amplitude"):
         recon = reconstruct(phase, chirps, mode, self.quantize, self.peak_power)
         targets = targets.expand_as(recon)
-        return pearson(recon, targets), ssim(recon, targets)
+        return pearson(recon, targets), ssim(recon, targets), recon
 
     def __call__(self, phase: torch.Tensor, chirps: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """Потеря на каждый элемент батча, форма (...,)."""
         losses = []
         for mode in self.modes:
-            cc, ss = self.scores(phase, chirps, targets, mode)
+            cc, ss, recon = self.scores(phase, chirps, targets, mode)
             score = (cc + self.ssim_weight * ss) / (1 + self.ssim_weight)
+            if self.dim_weight:
+                score = score - self.dim_weight * recon.mean((-2, -1))
             if self.softmin > 0:
                 n = torch.tensor(score.shape[-1], dtype=score.dtype).log()
                 score = -self.softmin * (torch.logsumexp(-score / self.softmin, dim=-1) - n)
