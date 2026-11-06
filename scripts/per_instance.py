@@ -1,5 +1,6 @@
-"""Сравнение per-instance методов на тестовых наборах. Оценка только через holo.evaluate.evaluate
-(восстановление из сохранённого 8-битного PNG); дополнительно метрики при амплитудном определении."""
+"""Сравнение методов синтеза ДОЭ под одну сцену. Оценка только через holo.evaluate.evaluate
+(восстановление из сохранённого 8-битного PNG по амплитуде |K|); дополнительно те же метрики
+при восстановлении по интенсивности, как проверка устойчивости к определению."""
 
 import argparse
 import json
@@ -26,8 +27,8 @@ def restarts(count: int, seed: int = 0) -> torch.Tensor:
     return torch.stack([random_phase((128, 128), seed + i) for i in range(count)])
 
 
-def gd(steps: int, objective: Objective = EXACT, count: int = 1, lr: float = 0.3, seconds: float | None = None):
-    return lambda t, c: fit(PhaseField(restarts(count)), t, c, objective, Schedule(steps, lr, quantize_from=0.5, seconds=seconds)).phase
+def gd(steps: int, objective: Objective = EXACT, count: int = 1, lr: float = 0.3):
+    return lambda t, c: fit(PhaseField(restarts(count)), t, c, objective, Schedule(steps, lr, quantize_from=0.5)).phase
 
 
 def learned(checkpoint: Path, finetune: int):

@@ -24,7 +24,7 @@ class Schedule:
     quantize_from: float = 0.0
     """С какой доли шагов включать STE-квантование фазы и восстановления."""
     seconds: float | None = None
-    """Ограничение по времени; шаги расписания тогда отсчитываются по времени."""
+    """Ограничение по времени вместо числа шагов; расписание тогда идёт по времени."""
 
     def factor(self, progress: float) -> float:
         return self.final + (1 - self.final) * 0.5 * (1 + math.cos(math.pi * min(progress, 1.0)))
