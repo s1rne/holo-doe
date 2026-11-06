@@ -2,12 +2,15 @@
 
 Режимы:
 
-- `fast` — один старт, фиксированное число шагов сети. Весь путь от четырёх изображений до фазы
-  делает сеть.
-- `neural` — несколько стартов в одном пакете, лучший выбирается по той же потере, что считает
-  проверка. Тоже целиком нейросетевой: стартовую фазу и каждый шаг даёт сеть.
+- `neural` (по умолчанию) — все шаги сети и, если начальную фазу даёт собственная сеть
+  оптимизатора, четыре параллельных старта с выбором лучшего по той же потере, что считает
+  проверка. Целиком нейросетевой: и стартовую фазу, и каждый шаг даёт сеть.
+- `fast` — восемь шагов и один старт, минимальное время.
 - `quality` — к ответу сети добавляются шаги обычного градиентного спуска по фазе. Это уже не
   нейросетевой метод, и в отчёте он идёт отдельной строкой.
+
+Начальную фазу даёт либо собственная сеть оптимизатора, либо прямая сеть (`forward_net`). Ответ
+прямой сети детерминирован, поэтому с ней число стартов всегда равно одному.
 """
 
 import time
@@ -58,10 +61,11 @@ def synthesize(model: LearnedOptimizer, targets: torch.Tensor, chirps: torch.Ten
                refine_lr: float = 0.2, select: Objective = Objective(), seed: int = 0,
                use_init: bool = True, forward_net: FeedForwardDOE | None = None) -> Synthesis:
     """targets (P, N, N) в 0..1 на любом устройстве; chirps уже на нужном устройстве в complex64."""
-    presets = {"fast": (1, 0), "neural": (4, 0), "quality": (4, 500)}
+    presets = {"fast": (8, 1, 0), "neural": (None, 4, 0), "quality": (None, 4, 500)}
     if mode not in presets:
         raise ValueError(f"режим {mode}: ожидается один из {sorted(presets)}")
-    default_seeds, default_refine = presets[mode]
+    default_steps, default_seeds, default_refine = presets[mode]
+    steps = default_steps if steps is None else steps
     seeds = default_seeds if seeds is None else seeds
     refine = default_refine if refine is None else refine
     start = time.perf_counter()
