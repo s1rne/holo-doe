@@ -114,6 +114,13 @@ def main() -> None:
     model = load_model(args.checkpoint, dev) if args.checkpoint else None
     methods = build_methods(args, model)
     args.out.mkdir(parents=True, exist_ok=True)
+    # Прогрев: первый вызов на ускорителе включает компиляцию ядер и завышает время в 10 раз.
+    warm = torch.rand(4, 128, 128, device=dev)
+    gerchberg_saxton(warm, chirps, 2)
+    fit(PhaseField(random_phase((128, 128), 0)[None]), warm, chirps, EXACT, Schedule(5, 0.3))
+    if model is not None:
+        synthesize(model, warm, chirps, "fast", 2, 1)
+    synchronize(dev)
     rows = []
     for folder in args.targets:
         names, images = load_targets(folder)
