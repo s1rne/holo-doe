@@ -46,6 +46,8 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True, help="папка для doe.png, восстановлений и metrics.json")
     parser.add_argument("--mode", choices=("neural", "fast", "quality"), default="neural")
     parser.add_argument("--checkpoint", type=Path, default=DEFAULT_CHECKPOINT)
+    parser.add_argument("--ff-checkpoint", type=Path, default=None,
+                        help="чекпойнт прямой сети: начальную фазу даёт она, а не начальная сеть оптимизатора")
     parser.add_argument("--steps", type=int, default=None, help="число шагов сети, по умолчанию как при обучении")
     parser.add_argument("--seeds", type=int, default=None, help="число параллельных стартов")
     parser.add_argument("--refine", type=int, default=None, help="шагов градиентного спуска после сети")
@@ -57,14 +59,19 @@ def main() -> None:
     dev = device()
     chirps = Setup().chirps().to(torch.complex64).to(dev)
     model = load_model(args.checkpoint, dev)
+    forward_net = None
+    if args.ff_checkpoint:
+        from holo.models.feedforward import load_model as load_forward
+        forward_net = load_forward(args.ff_checkpoint, dev)[0]
     torch.manual_seed(args.seed)
     start = time.perf_counter()
     result = synthesize(model, targets, chirps, args.mode, args.steps, args.seeds, args.refine,
-                        select=Objective(), seed=args.seed)
+                        select=Objective(), seed=args.seed, forward_net=forward_net)
     seconds = time.perf_counter() - start
     code, recon, metrics = evaluate(result.phase, images)
     extra = {"method": "learned-opt", "mode": args.mode, "steps": result.steps, "refine": result.refine,
-             "seconds": seconds, "checkpoint": str(args.checkpoint), "device": dev.type}
+             "seconds": seconds, "checkpoint": str(args.checkpoint), "ff_checkpoint": str(args.ff_checkpoint),
+             "device": dev.type}
     save(args.out, names, code, recon, metrics, extra)
     for name, cc, ss in zip(names, metrics["cc"], metrics["ssim"]):
         print(f"{name:24} КК {cc:.4f}  ИСС {ss:.4f}")
