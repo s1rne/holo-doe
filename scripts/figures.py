@@ -60,15 +60,20 @@ def montage(args) -> None:
     print(f"записано {args.out}")
 
 
-FAMILIES = (("GS ", "GS (параллельный)"), ("ping-pong", "ping-pong (последовательный)"),
-            ("GS 50 + GD", "GS 50 + GD"), ("GD ", "GD (Adam по фазе)"),
-            ("сеть + GD", "сеть + GD"), ("сеть", "обучаемый оптимизатор"))
-
-
 def family(method: str) -> str | None:
-    for prefix, label in FAMILIES:
-        if method.startswith(prefix):
-            return label
+    """Семейство кривой: методы одного семейства отличаются только бюджетом итераций."""
+    if "ping-pong" in method:
+        return "ping-pong (последовательный)"
+    if method.startswith("сеть"):
+        return "обучаемый оптимизатор + GD" if "+ GD" in method else "обучаемый оптимизатор"
+    if method.startswith("ФФ"):
+        return "прямая сеть"
+    if method.startswith("GS 50 + GD"):
+        return "GS 50 + GD"
+    if method.startswith("GS"):
+        return "GS (параллельный)"
+    if method.startswith("GD"):
+        return "GD (Adam по фазе)"
     return None
 
 
