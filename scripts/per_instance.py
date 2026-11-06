@@ -11,7 +11,7 @@ import torch
 from holo.baselines import gerchberg_saxton, gradient_descent, random_phase
 from holo.evaluate import evaluate, evaluate_amplitude, save
 from holo.io import load_targets
-from holo.models import DeepPrior, FourierMLP, PhaseField, Siren
+from holo.models import ComplexField, DeepPrior, FourierMLP, PhaseField, Siren
 from holo.models.learned import LearnedOptimizer
 from holo.objective import Objective
 from holo.optics import Setup
@@ -24,7 +24,7 @@ def restarts(count: int, seed: int = 0) -> torch.Tensor:
     return torch.stack([random_phase((128, 128), seed + i) for i in range(count)])
 
 
-def gd(steps: int, objective: Objective = EXACT, count: int = 1, lr: float = 0.1, seconds: float | None = None):
+def gd(steps: int, objective: Objective = EXACT, count: int = 1, lr: float = 0.5, seconds: float | None = None):
     return lambda t, c: fit(PhaseField(restarts(count)), t, c, objective, Schedule(steps, lr, quantize_from=0.5, seconds=seconds)).phase
 
 
@@ -48,10 +48,13 @@ METHODS = {
     "gs50+gd500 (базовый)": lambda t, c: gradient_descent(t, c, 500, init=gerchberg_saxton(t, c, 50)),
     "gd-exact 500": gd(500),
     "gd-exact 3k": gd(3000),
-    "gd-exact 20k": gd(20000),
-    "gd-exact 3k ×16 рестартов": gd(3000, count=16),
-    "gd-exact balanced 3k": gd(3000, Objective(peak_power=16, softmin=0.05)),
-    "gd-exact robust I+A 3k": gd(3000, Objective(peak_power=16, modes=("intensity", "amplitude"))),
+    "gd-exact 10k": gd(10000),
+    "gd-exact 30k": gd(30000),
+    "gd-exact 10k ×8 рестартов": gd(10000, count=8),
+    "gd-exact 3k, мягкий минимум": gd(3000, Objective(peak_power=16, softmin=0.05)),
+    "gd-exact 3k, без мягкого пика": gd(3000, Objective()),
+    "gd-exact 3k, |K| и |K|²": gd(3000, Objective(peak_power=16, modes=("intensity", "amplitude"))),
+    "complex-field 3k": lambda t, c: fit(ComplexField(restarts(1)), t, c, EXACT, Schedule(3000, 0.2, quantize_from=0.5)).phase,
     "dip-noise 3k": lambda t, c: fit(DeepPrior(torch.randn(1, 32, 128, 128, generator=torch.Generator().manual_seed(0))),
                                      t, c, EXACT, Schedule(3000, 1e-3, quantize_from=0.5)).phase,
     "siren 3k": lambda t, c: fit(Siren(), t, c, EXACT, Schedule(3000, 1e-4, quantize_from=0.5)).phase,
