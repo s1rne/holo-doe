@@ -7,7 +7,8 @@ from dataclasses import dataclass
 import torch
 
 from .losses import pearson, ssim
-from .optics import reconstruct as optics_reconstruct, to_unit
+from .optics import to_unit
+from .optics import reconstruct as field_image
 
 
 def ste_round(x: torch.Tensor) -> torch.Tensor:
@@ -38,7 +39,7 @@ def reconstruct(phase: torch.Tensor, chirps: torch.Tensor, mode: str = "amplitud
     до 8 бит. mode: amplitude |K| (как в проверке) или intensity |K|²."""
     if quantize:
         phase = quantize_phase(phase)
-    unit = normalize(optics_reconstruct(phase, chirps, mode), power)
+    unit = normalize(field_image(phase, chirps, mode), power)
     return ste_round(unit * 255) / 255 if quantize else unit
 
 
