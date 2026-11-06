@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 import torch
 
+from .models.feedforward import FeedForwardDOE
 from .models.learned import LearnedOptimizer
 from .models.phase import PhaseField
 from .objective import Objective
@@ -35,7 +36,7 @@ class Synthesis:
 @torch.no_grad()
 def neural_phase(model: LearnedOptimizer, targets: torch.Tensor, chirps: torch.Tensor, steps: int | None = None,
                  seeds: int = 1, select: Objective = Objective(), seed: int = 0,
-                 use_init: bool = True, forward_net=None) -> tuple[torch.Tensor, float]:
+                 use_init: bool = True, forward_net: FeedForwardDOE | None = None) -> tuple[torch.Tensor, float]:
     """Фаза ДОЭ от сети. targets (P, N, N) в 0..1. Возвращает лучший из seeds стартов и его потерю.
 
     forward_net — прямая сеть (holo/models/feedforward.py): если она задана, начальную фазу даёт
@@ -55,7 +56,7 @@ def neural_phase(model: LearnedOptimizer, targets: torch.Tensor, chirps: torch.T
 def synthesize(model: LearnedOptimizer, targets: torch.Tensor, chirps: torch.Tensor, mode: str = "neural",
                steps: int | None = None, seeds: int | None = None, refine: int | None = None,
                refine_lr: float = 0.2, select: Objective = Objective(), seed: int = 0,
-               use_init: bool = True, forward_net=None) -> Synthesis:
+               use_init: bool = True, forward_net: FeedForwardDOE | None = None) -> Synthesis:
     """targets (P, N, N) в 0..1 на любом устройстве; chirps уже на нужном устройстве в complex64."""
     presets = {"fast": (1, 0), "neural": (4, 0), "quality": (4, 500)}
     if mode not in presets:
