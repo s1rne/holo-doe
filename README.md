@@ -14,7 +14,7 @@ PYTHONPATH=. uv run python scripts/per_instance.py data/targets/photos data/targ
 Обучение обучаемого оптимизатора и прогон с ним:
 
 ```bash
-PYTHONPATH=. uv run python scripts/train_learned_optimizer.py --iterations 1200
+PYTHONPATH=. uv run python scripts/train_learned_optimizer.py --iterations 500
 PYTHONPATH=. uv run python scripts/per_instance.py data/targets/photos --learned runs/learned_optimizer.pt
 ```
 
@@ -28,7 +28,11 @@ PYTHONPATH=. uv run python scripts/per_instance.py data/targets/photos --learned
 - `holo/objective.py`: целевая функция, повторяющая проверку, с квантованием фазы и восстановления через STE.
 - `holo/optimize.py`: оптимизация одной сцены любой параметризацией фазы, расписание шага, рестарты в батче.
 - `holo/models/`: параметризации фазы (свободное поле, deep image prior, SIREN, Fourier-MLP) и обучаемый оптимизатор.
-- `holo/analysis.py`: анализ предела многоплоскостного восстановления, см. [docs/per_instance.md](docs/per_instance.md).
+- `holo/pretrain.py`: этап подгонки под комплексную цель с гладкой фазой, подавляет спекл.
+- `holo/data.py`: случайные обучающие сцены для обучаемого оптимизатора.
+- `holo/analysis.py`: анализ предела многоплоскостного восстановления.
+
+Рецепт, сравнение методов и выводы о потолке качества: [docs/per_instance.md](docs/per_instance.md).
 
 ## Проверка модели
 
