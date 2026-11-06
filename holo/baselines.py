@@ -29,6 +29,26 @@ def gerchberg_saxton(targets: torch.Tensor, chirps: torch.Tensor, iterations: in
     return phase
 
 
+def ping_pong(targets: torch.Tensor, chirps: torch.Tensor, iterations: int = 200, seed: int = 0) -> torch.Tensor:
+    """Последовательный ping-pong по Дорша и Маковского: за один проход плоскости обходятся по
+    очереди, в каждой амплитуда заменяется целевой и поле возвращается в плоскость ДОЭ.
+
+    Отличие от параллельного варианта (`gerchberg_saxton`): поля плоскостей не суммируются,
+    а применяются одно за другим, поэтому последняя плоскость в проходе получает преимущество.
+    Это метод, на который ссылаются работы лаборатории. Одна итерация здесь равна одному
+    полному обходу четырёх плоскостей, то есть вчетверо дороже итерации параллельного GS."""
+    phase = random_phase(targets.shape[-2:], seed, targets.device)
+    for _ in range(iterations):
+        for plane in range(targets.shape[0]):
+            chirp = chirps[plane:plane + 1]
+            amplitude = targets[plane:plane + 1]
+            field = propagate(phase, chirp)
+            scale = field.abs().mean() / amplitude.mean().clamp_min(1e-9)
+            constrained = torch.polar(amplitude * scale, field.angle())
+            phase = back_propagate(constrained, chirp)[0].angle()
+    return phase
+
+
 def gradient_descent(targets: torch.Tensor, chirps: torch.Tensor, iterations: int = 3000, lr: float = 0.05,
                      seed: int = 0, init: torch.Tensor | None = None, mode: str = "amplitude") -> torch.Tensor:
     """Прямая оптимизация фазы по метрикам задачи через дифференцируемую модель Френеля."""

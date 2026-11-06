@@ -6,3 +6,5 @@ runs/
 outputs/
 *.ckpt
 *.pt
+data/raw/
+data/cache/

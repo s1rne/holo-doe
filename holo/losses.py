@@ -28,6 +28,24 @@ def ssim(a: torch.Tensor, b: torch.Tensor, win: int = 7, data_range: float = 1.0
     return s.mean(dim=(-3, -2, -1)).reshape(shape[:-2])
 
 
+def local_std(x: torch.Tensor, win: int = 7) -> torch.Tensor:
+    """Локальное СКО в окне win×win, та же несмещённая оценка, что в ssim."""
+    shape = x.shape
+    x = x.reshape(-1, 1, *shape[-2:])
+    kernel = torch.full((1, 1, win, win), 1.0 / win**2, dtype=x.dtype, device=x.device)
+    mean = F.conv2d(x, kernel)
+    var = win**2 / (win**2 - 1) * (F.conv2d(x * x, kernel) - mean * mean)
+    return var.clamp_min(0).sqrt().reshape(*shape[:-2], *mean.shape[-2:])
+
+
+def speckle_excess(recon: torch.Tensor, target: torch.Tensor, win: int = 7) -> torch.Tensor:
+    """Превышение локального СКО восстановления над локальным СКО цели, среднее по кадру.
+
+    Мера спекла, привязанная к цели: там, где цель гладкая, любая локальная структура в
+    восстановлении — спекл, и он бьёт по SSIM. Там, где цель сама изрезана, превышения нет."""
+    return (local_std(recon, win) - local_std(target, win)).clamp_min(0).mean((-2, -1))
+
+
 def image_loss(recon: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     """Сумма (1 − CC) и (1 − SSIM) по всем плоскостям."""
     return ((1 - pearson(recon, target)) + (1 - ssim(recon, target))).mean()
