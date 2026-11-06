@@ -27,7 +27,7 @@ from holo.models.learned import load_model
 from holo.neural import synthesize
 from holo.objective import Objective
 from holo.optics import Setup
-from holo.optimize import Schedule, device, fit
+from holo.optimize import Schedule, device, fit, synchronize
 
 ROOT = Path(__file__).resolve().parent.parent
 EXACT = Objective()
@@ -122,8 +122,7 @@ def main() -> None:
             torch.manual_seed(0)
             start = time.perf_counter()
             phase = run(targets, chirps)
-            if dev.type == "cuda":
-                torch.cuda.synchronize()
+            synchronize(dev)
             seconds = time.perf_counter() - start
             code, recon, metrics = evaluate(phase.reshape(128, 128).cpu().double(), images)
             row = {"set": folder.name, "method": method, "cc": metrics["cc_mean"], "ssim": metrics["ssim_mean"],

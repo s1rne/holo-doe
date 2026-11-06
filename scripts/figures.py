@@ -102,6 +102,36 @@ def curve(args) -> None:
     print(f"записано {args.out}")
 
 
+GROUPS = {"photos": ("photos",), "glyphs": ("glyphs",), "extra": ("extra",),
+          "heldout_kodak": tuple(f"kodak_{i}" for i in range(1, 7)),
+          "heldout_glyphs": tuple(f"glyphs_{i}" for i in range(1, 5)),
+          "heldout_mixed": ("mixed_1", "mixed_2"),
+          "похожие": ("similar_glyphs", "similar_photos"), "разные": ("diverse",)}
+
+
+def table(args) -> None:
+    """Сводная таблица в markdown: строка на метод, колонка на группу наборов."""
+    rows = [json.loads(line) for line in args.rows.read_text().splitlines() if line.strip()]
+    groups = {k: v for k, v in GROUPS.items() if not args.groups or k in args.groups}
+    order, cells = [], defaultdict(dict)
+    for row in rows:
+        if row["method"] not in order:
+            order.append(row["method"])
+        for group, members in groups.items():
+            if row["set"] in members:
+                cells[row["method"]].setdefault(group, []).append(row)
+    columns = [g for g in groups if any(g in cells[m] for m in order)]
+    value = {"both": lambda r: f"{np.mean([x['cc'] for x in r]):.3f} / {np.mean([x['ssim'] for x in r]):.3f}",
+             "min": lambda r: f"{np.mean([x['cc_min'] for x in r]):.3f} / {np.mean([x['ssim_min'] for x in r]):.3f}",
+             "brightness": lambda r: f"{np.mean([x['brightness'] for x in r]):.2f}"}[args.value]
+    print("| метод | время, с | " + " | ".join(columns) + " |")
+    print("|---|---|" + "---|" * len(columns))
+    for method in order:
+        seconds = np.mean([r["seconds"] for group in cells[method].values() for r in group])
+        line = [value(cells[method][c]) if c in cells[method] else "" for c in columns]
+        print(f"| {method} | {seconds:.2f} | " + " | ".join(line) + " |")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
@@ -118,6 +148,11 @@ def main() -> None:
     c.add_argument("--title", default=None)
     c.add_argument("--out", type=Path, required=True)
     c.set_defaults(func=curve)
+    t = sub.add_parser("table")
+    t.add_argument("--rows", type=Path, required=True, help="outputs/bench/<tag>.jsonl")
+    t.add_argument("--groups", nargs="*", default=None)
+    t.add_argument("--value", choices=("both", "min", "brightness"), default="both")
+    t.set_defaults(func=table)
     args = parser.parse_args()
     args.func(args)
 

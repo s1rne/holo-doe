@@ -18,7 +18,7 @@ import torch
 from .models.learned import LearnedOptimizer
 from .models.phase import PhaseField
 from .objective import Objective
-from .optimize import Schedule, device, fit
+from .optimize import Schedule, device, fit, synchronize
 
 FEATURE_OBJECTIVE = Objective(quantize=False)
 
@@ -70,6 +70,5 @@ def synthesize(model: LearnedOptimizer, targets: torch.Tensor, chirps: torch.Ten
         result = fit(PhaseField(phase[None]), targets, chirps, select,
                      Schedule(refine, refine_lr, quantize_from=0.5))
         phase, loss = result.phase, result.loss
-    if device().type == "cuda":
-        torch.cuda.synchronize()
+    synchronize(device())
     return Synthesis(phase.reshape(128, 128).cpu().double(), loss, time.perf_counter() - start, used, refine)
