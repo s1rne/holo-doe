@@ -53,35 +53,29 @@ def classical(name: str, budgets: dict) -> dict:
     return methods
 
 
-def build_methods(args, model) -> dict:
+def build_methods(args, model, forward_net) -> dict:
     budgets = {"gs": args.gs, "pp": args.pp, "gd": args.gd, "gsgd": args.gsgd}
     methods = classical("classical", budgets) if not args.only_neural else {}
     if args.implicit:
         methods["SIREN 3k"] = lambda t, c: fit(Siren(), t, c, EXACT, Schedule(3000, 1e-4, quantize_from=0.5)).phase
         methods["fourier-MLP 3k"] = lambda t, c: fit(FourierMLP(sigma=64), t, c, EXACT,
                                                      Schedule(3000, 1e-3, quantize_from=0.5)).phase
-    if model is not None:
-        for n in args.neural:
-            methods[f"сеть {n} шагов"] = (lambda n: lambda t, c: synthesize(model, t, c, "fast", n, 1).phase)(n)
-        for n in args.seeds:
-            methods[f"сеть {model.steps} шагов × {n} стартов"] = (
-                lambda n: lambda t, c: synthesize(model, t, c, "neural", None, n).phase)(n)
-        for n in args.neural_gd:
-            methods[f"сеть + GD {n}"] = (lambda n: lambda t, c: synthesize(model, t, c, "quality", None, 4, n).phase)(n)
-        if args.ablate:
-            methods[f"сеть {model.steps} шагов, старт случайный"] = \
-                lambda t, c: synthesize(model, t, c, "fast", None, 1, use_init=False).phase
-            methods["сеть, только начальная фаза"] = lambda t, c: synthesize(model, t, c, "fast", 0, 1).phase
-    if args.ff_checkpoint:
-        from holo.models.feedforward import load_model as load_ff
-        ff = load_ff(args.ff_checkpoint, device())[0]
-        methods["ФФ-сеть, 1 проход"] = lambda t, c: ff(t[None].float())[0].detach()
-        if model is not None:
-            def hybrid(t, c):
-                with torch.no_grad():
-                    phase = ff(t[None].float())
-                    return model(phase, t[None].float(), c, Objective(quantize=False))[-1][0]
-            methods[f"ФФ-сеть + {model.steps} шагов оптимизатора"] = hybrid
+    if forward_net is not None:
+        methods["ФФ-сеть, 1 проход"] = lambda t, c: forward_net(t[None].float())[0].detach()
+    if model is None:
+        return methods
+    name = args.name or ("ФФ-старт" if forward_net is not None else "свой старт")
+    run = lambda **kw: lambda t, c: synthesize(model, t, c, forward_net=forward_net, **kw).phase
+    for n in args.neural:
+        methods[f"сеть ({name}) {n} шагов"] = run(mode="fast", steps=n, seeds=1)
+    for n in args.seeds:
+        methods[f"сеть ({name}) {model.steps} шагов × {n} стартов"] = run(mode="neural", seeds=n)
+    for n in args.neural_gd:
+        methods[f"сеть ({name}) + GD {n}"] = run(mode="quality", seeds=4, refine=n)
+    if args.ablate:
+        methods[f"сеть ({name}) {model.steps} шагов, старт случайный"] = \
+            lambda t, c: synthesize(model, t, c, "fast", None, 1, use_init=False).phase
+        methods[f"сеть ({name}), только начальная фаза"] = run(mode="fast", steps=0, seeds=1)
     return methods
 
 
@@ -105,6 +99,8 @@ def main() -> None:
     parser.add_argument("--implicit", action="store_true", help="добавить SIREN и fourier-MLP")
     parser.add_argument("--ablate", action="store_true", help="добавить разборы: старт без сети, только начальная фаза")
     parser.add_argument("--ff-checkpoint", type=Path, default=None, help="чекпойнт прямой сети (ветка exp/feedforward)")
+    parser.add_argument("--ff-init", action="store_true", help="начальную фазу оптимизатора даёт прямая сеть")
+    parser.add_argument("--name", default=None, help="подпись варианта сети в именах методов")
     parser.add_argument("--only-neural", action="store_true")
     parser.add_argument("--save-images", action="store_true")
     args = parser.parse_args()
@@ -112,14 +108,20 @@ def main() -> None:
     dev = device()
     chirps = Setup().chirps().to(torch.complex64).to(dev)
     model = load_model(args.checkpoint, dev) if args.checkpoint else None
-    methods = build_methods(args, model)
+    forward_net = None
+    if args.ff_checkpoint:
+        from holo.models.feedforward import load_model as load_forward
+        forward_net = load_forward(args.ff_checkpoint, dev)[0]
+    methods = build_methods(args, model, forward_net if args.ff_init else None)
+    if args.ff_checkpoint and not args.ff_init:
+        methods["ФФ-сеть, 1 проход"] = lambda t, c: forward_net(t[None].float())[0].detach()
     args.out.mkdir(parents=True, exist_ok=True)
     # Прогрев: первый вызов на ускорителе включает компиляцию ядер и завышает время в 10 раз.
     warm = torch.rand(4, 128, 128, device=dev)
     gerchberg_saxton(warm, chirps, 2)
     fit(PhaseField(random_phase((128, 128), 0)[None]), warm, chirps, EXACT, Schedule(5, 0.3))
     if model is not None:
-        synthesize(model, warm, chirps, "fast", 2, 1)
+        synthesize(model, warm, chirps, "fast", 2, 1, forward_net=forward_net if args.ff_init else None)
     synchronize(dev)
     sink = (args.out / f"{args.tag}.jsonl").open("a")
     for folder in args.targets:
