@@ -68,6 +68,20 @@ def build_methods(args, model) -> dict:
                 lambda n: lambda t, c: synthesize(model, t, c, "neural", None, n).phase)(n)
         for n in args.neural_gd:
             methods[f"сеть + GD {n}"] = (lambda n: lambda t, c: synthesize(model, t, c, "quality", None, 4, n).phase)(n)
+        if args.ablate:
+            methods[f"сеть {model.steps} шагов, старт случайный"] = \
+                lambda t, c: synthesize(model, t, c, "fast", None, 1, use_init=False).phase
+            methods["сеть, только начальная фаза"] = lambda t, c: synthesize(model, t, c, "fast", 0, 1).phase
+    if args.ff_checkpoint:
+        from holo.models.feedforward import load_model as load_ff
+        ff = load_ff(args.ff_checkpoint, device())[0]
+        methods["ФФ-сеть, 1 проход"] = lambda t, c: ff(t[None].float())[0].detach()
+        if model is not None:
+            def hybrid(t, c):
+                with torch.no_grad():
+                    phase = ff(t[None].float())
+                    return model(phase, t[None].float(), c, Objective(quantize=False))[-1][0]
+            methods[f"ФФ-сеть + {model.steps} шагов оптимизатора"] = hybrid
     return methods
 
 
@@ -89,6 +103,8 @@ def main() -> None:
     parser.add_argument("--seeds", type=int, nargs="*", default=[4])
     parser.add_argument("--neural-gd", type=int, nargs="*", default=[200, 500])
     parser.add_argument("--implicit", action="store_true", help="добавить SIREN и fourier-MLP")
+    parser.add_argument("--ablate", action="store_true", help="добавить разборы: старт без сети, только начальная фаза")
+    parser.add_argument("--ff-checkpoint", type=Path, default=None, help="чекпойнт прямой сети (ветка exp/feedforward)")
     parser.add_argument("--only-neural", action="store_true")
     parser.add_argument("--save-images", action="store_true")
     args = parser.parse_args()

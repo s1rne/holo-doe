@@ -67,7 +67,7 @@ class LearnedOptimizer(nn.Module):
                 "init_width": self.init.inp.body[0].out_channels if self.init else 0,
                 "init_depth": len(self.init.down) if self.init else 0}
 
-    def start(self, targets: torch.Tensor, seed: int = 0) -> torch.Tensor:
+    def start(self, targets: torch.Tensor, seed: int = 0, use_init: bool = True) -> torch.Tensor:
         """Начальная фаза (B, N, N): случайная фаза, повёрнутая поправкой сети по целям.
 
         Поправка складывается с единичным вектором exp(jφ) и фаза берётся как atan2, поэтому
@@ -75,7 +75,7 @@ class LearnedOptimizer(nn.Module):
         задаёт старт целиком. Разрыва на ±π сеть не видит."""
         batch, _, n, _ = targets.shape
         base = torch.stack([random_phase((n, n), seed + b) for b in range(batch)]).float().to(targets.device)
-        if self.init is None:
+        if self.init is None or not use_init:
             return base
         grid = coords(n, targets.device).expand(batch, -1, -1, -1)
         out = self.init(torch.cat([targets, grid], 1))

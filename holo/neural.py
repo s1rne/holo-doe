@@ -34,12 +34,14 @@ class Synthesis:
 
 @torch.no_grad()
 def neural_phase(model: LearnedOptimizer, targets: torch.Tensor, chirps: torch.Tensor, steps: int | None = None,
-                 seeds: int = 1, select: Objective = Objective(), seed: int = 0) -> tuple[torch.Tensor, float]:
+                 seeds: int = 1, select: Objective = Objective(), seed: int = 0,
+                 use_init: bool = True) -> tuple[torch.Tensor, float]:
     """Фаза ДОЭ от сети. targets (P, N, N) в 0..1. Возвращает лучший из seeds стартов и его потерю."""
     dev = chirps.device
     batch = targets.float().to(dev)[None].expand(seeds, -1, -1, -1).contiguous()
-    phase = model.start(batch, seed=seed)
-    phase = model(phase, batch, chirps, FEATURE_OBJECTIVE, steps)[-1]
+    phase = model.start(batch, seed=seed, use_init=use_init)
+    history = model(phase, batch, chirps, FEATURE_OBJECTIVE, steps)
+    phase = history[-1] if history else phase
     loss = select(phase, chirps, batch)
     index = int(loss.argmin())
     return phase[index], float(loss[index])
@@ -47,7 +49,8 @@ def neural_phase(model: LearnedOptimizer, targets: torch.Tensor, chirps: torch.T
 
 def synthesize(model: LearnedOptimizer, targets: torch.Tensor, chirps: torch.Tensor, mode: str = "neural",
                steps: int | None = None, seeds: int | None = None, refine: int | None = None,
-               refine_lr: float = 0.2, select: Objective = Objective(), seed: int = 0) -> Synthesis:
+               refine_lr: float = 0.2, select: Objective = Objective(), seed: int = 0,
+               use_init: bool = True) -> Synthesis:
     """targets (P, N, N) в 0..1 на любом устройстве; chirps уже на нужном устройстве в complex64."""
     presets = {"fast": (1, 0), "neural": (4, 0), "quality": (4, 500)}
     if mode not in presets:
@@ -56,7 +59,7 @@ def synthesize(model: LearnedOptimizer, targets: torch.Tensor, chirps: torch.Ten
     seeds = default_seeds if seeds is None else seeds
     refine = default_refine if refine is None else refine
     start = time.perf_counter()
-    phase, loss = neural_phase(model, targets, chirps, steps, seeds, select, seed)
+    phase, loss = neural_phase(model, targets, chirps, steps, seeds, select, seed, use_init)
     used = steps if steps is not None else model.steps
     if refine:
         result = fit(PhaseField(phase[None]), targets, chirps, select,
