@@ -101,7 +101,7 @@ def main() -> None:
     rows = []
     for folder in args.targets:
         names, images = load_targets(folder)
-        targets = torch.from_numpy(images).double().to(dev) / 255
+        targets = torch.from_numpy(images).float().to(dev) / 255
         for method, run in methods.items():
             torch.manual_seed(0)
             start = time.perf_counter()
@@ -109,7 +109,7 @@ def main() -> None:
             if dev.type == "cuda":
                 torch.cuda.synchronize()
             seconds = time.perf_counter() - start
-            code, recon, metrics = evaluate(phase.reshape(128, 128).double().cpu(), images)
+            code, recon, metrics = evaluate(phase.reshape(128, 128).cpu().double(), images)
             row = {"set": folder.name, "method": method, "cc": metrics["cc_mean"], "ssim": metrics["ssim_mean"],
                    "cc_min": min(metrics["cc"]), "ssim_min": min(metrics["ssim"]),
                    "brightness": brightness(recon, images), "seconds": seconds}

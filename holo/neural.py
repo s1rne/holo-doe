@@ -64,4 +64,4 @@ def synthesize(model: LearnedOptimizer, targets: torch.Tensor, chirps: torch.Ten
         phase, loss = result.phase, result.loss
     if device().type == "cuda":
         torch.cuda.synchronize()
-    return Synthesis(phase.reshape(128, 128).double().cpu(), loss, time.perf_counter() - start, used, refine)
+    return Synthesis(phase.reshape(128, 128).cpu().double(), loss, time.perf_counter() - start, used, refine)
