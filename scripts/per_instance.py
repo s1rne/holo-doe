@@ -38,7 +38,7 @@ def learned(checkpoint: Path, finetune: int):
             phase = model(restarts(1).float().to(device()), t.float()[None].to(device()), c.to(torch.complex64).to(device()),
                           Objective(quantize=False, peak_power=16))[-1].cpu()
         if finetune:
-            phase = fit(PhaseField(phase), t, c, EXACT, Schedule(finetune, 0.05, quantize_from=0.5)).phase
+            phase = fit(PhaseField(phase), t, c, EXACT, Schedule(finetune, 0.5, quantize_from=0.5)).phase
         return phase.reshape(128, 128)
     return run
 
