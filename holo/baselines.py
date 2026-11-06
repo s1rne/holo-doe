@@ -3,7 +3,7 @@
 import torch
 
 from .losses import image_loss
-from .optics import propagate, to_unit
+from .optics import propagate, reconstruct, to_unit
 
 
 def back_propagate(field: torch.Tensor, chirps: torch.Tensor) -> torch.Tensor:
@@ -19,8 +19,8 @@ def random_phase(shape, seed: int, device=None) -> torch.Tensor:
 
 def gerchberg_saxton(targets: torch.Tensor, chirps: torch.Tensor, iterations: int = 200, seed: int = 0) -> torch.Tensor:
     """Многоплоскостной GS: в каждой плоскости амплитуда заменяется целевой, поля плоскостей суммируются в ДОЭ."""
-    amplitude = targets.sqrt()
-    phase = random_phase(targets.shape[-2:], seed)
+    amplitude = targets
+    phase = random_phase(targets.shape[-2:], seed, targets.device)
     for _ in range(iterations):
         field = propagate(phase, chirps)
         scale = field.abs().mean(dim=(-2, -1), keepdim=True) / amplitude.mean(dim=(-2, -1), keepdim=True)
@@ -29,16 +29,18 @@ def gerchberg_saxton(targets: torch.Tensor, chirps: torch.Tensor, iterations: in
     return phase
 
 
-def gradient_descent(targets: torch.Tensor, chirps: torch.Tensor, iterations: int = 500, lr: float = 0.05,
-                     seed: int = 0, init: torch.Tensor | None = None) -> torch.Tensor:
+def gradient_descent(targets: torch.Tensor, chirps: torch.Tensor, iterations: int = 3000, lr: float = 0.05,
+                     seed: int = 0, init: torch.Tensor | None = None, mode: str = "amplitude") -> torch.Tensor:
     """Прямая оптимизация фазы по метрикам задачи через дифференцируемую модель Френеля."""
-    phase = (random_phase(targets.shape[-2:], seed) if init is None else init.clone()).float().requires_grad_()
+    phase = (random_phase(targets.shape[-2:], seed, targets.device) if init is None else init.clone()).float().requires_grad_()
     chirps = chirps.to(torch.complex64)
     targets = targets.float()
     optimizer = torch.optim.Adam([phase], lr=lr)
+    schedule = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, iterations)
     for _ in range(iterations):
         optimizer.zero_grad()
-        loss = image_loss(to_unit(propagate(phase, chirps).abs() ** 2), targets)
+        loss = image_loss(to_unit(reconstruct(phase, chirps, mode)), targets)
         loss.backward()
         optimizer.step()
+        schedule.step()
     return phase.detach().double()

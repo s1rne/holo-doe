@@ -8,13 +8,14 @@ import torch
 
 from .io import save_png
 from .metrics import report
-from .optics import Setup, intensity, phase_to_png, png_to_phase, to_uint8
+from .optics import Setup, phase_to_png, png_to_phase, reconstruct, to_uint8
 
 
-def evaluate(phase: torch.Tensor, targets: np.ndarray, setup: Setup = Setup()) -> tuple[np.ndarray, np.ndarray, dict]:
+def evaluate(phase: torch.Tensor, targets: np.ndarray, setup: Setup = Setup(),
+             mode: str = "amplitude") -> tuple[np.ndarray, np.ndarray, dict]:
     code = phase_to_png(phase.cpu().double())
-    recon = to_uint8(intensity(png_to_phase(code), setup.chirps())).numpy()
-    return code.numpy(), recon, report(targets, recon)
+    recon = to_uint8(reconstruct(png_to_phase(code), setup.chirps(), mode)).numpy()
+    return code.numpy(), recon, {**report(targets, recon), "mode": mode}
 
 
 def save(out: Path, names: list[str], code: np.ndarray, recon: np.ndarray, metrics: dict, extra: dict) -> None:

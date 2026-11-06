@@ -42,8 +42,18 @@ def propagate(phase: torch.Tensor, chirps: torch.Tensor) -> torch.Tensor:
     return torch.fft.fftshift(spectrum, dim=(-2, -1))
 
 
+def reconstruct(phase: torch.Tensor, chirps: torch.Tensor, mode: str = "amplitude") -> torch.Tensor:
+    """Восстановленное изображение.
+
+    По условию сохраняются модули значений поля, поэтому сравнение идёт по амплитуде |K|.
+    Режим intensity оставлен для сравнения: от него зависит ИСС, но не КК.
+    """
+    field = propagate(phase, chirps).abs()
+    return field if mode == "amplitude" else field**2
+
+
 def intensity(phase: torch.Tensor, chirps: torch.Tensor) -> torch.Tensor:
-    return propagate(phase, chirps).abs() ** 2
+    return reconstruct(phase, chirps, "intensity")
 
 
 def phase_to_png(phase: torch.Tensor) -> torch.Tensor:

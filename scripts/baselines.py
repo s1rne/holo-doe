@@ -23,8 +23,8 @@ def main() -> None:
         targets = torch.from_numpy(images).double() / 255
         runs = {
             "gs200": lambda: gerchberg_saxton(targets, chirps, 200),
-            "gd500": lambda: gradient_descent(targets, chirps, 500),
-            "gs50+gd500": lambda: gradient_descent(targets, chirps, 500, init=gerchberg_saxton(targets, chirps, 50)),
+            "gd3000": lambda: gradient_descent(targets, chirps, 3000),
+            "gs50+gd3000": lambda: gradient_descent(targets, chirps, 3000, init=gerchberg_saxton(targets, chirps, 50)),
         }
         for method, run in runs.items():
             start = time.perf_counter()
