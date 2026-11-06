@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from holo.baselines import gerchberg_saxton, gradient_descent, ping_pong, random_phase
+from holo.baselines import gerchberg_saxton, ping_pong, random_phase
 from holo.evaluate import evaluate, save
 from holo.io import load_targets
 from holo.models import FourierMLP, PhaseField, Siren
@@ -38,7 +38,7 @@ def gd(steps: int, lr: float = 0.3, objective: Objective = EXACT):
                             Schedule(steps, lr, quantize_from=0.5)).phase
 
 
-def classical(name: str, budgets: dict) -> dict:
+def classical(budgets: dict) -> dict:
     """Классические методы: параллельный GS, последовательный ping-pong и градиентный спуск."""
     methods = {}
     for n in budgets["gs"]:
@@ -55,7 +55,7 @@ def classical(name: str, budgets: dict) -> dict:
 
 def build_methods(args, model, forward_net) -> dict:
     budgets = {"gs": args.gs, "pp": args.pp, "gd": args.gd, "gsgd": args.gsgd}
-    methods = classical("classical", budgets) if not args.only_neural else {}
+    methods = {} if args.only_neural else classical(budgets)
     if args.implicit:
         methods["SIREN 3k"] = lambda t, c: fit(Siren(), t, c, EXACT, Schedule(3000, 1e-4, quantize_from=0.5)).phase
         methods["fourier-MLP 3k"] = lambda t, c: fit(FourierMLP(sigma=64), t, c, EXACT,

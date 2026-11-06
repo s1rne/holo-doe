@@ -95,7 +95,8 @@ def main() -> None:
             parameter.requires_grad_(False)
     if args.init_from:
         state = torch.load(args.init_from, map_location=dev, weights_only=False)["state"]
-        print(model.load_state_dict(state, strict=False), flush=True)
+        loaded = model.load_state_dict(state, strict=False)
+        print(f"начальные веса: {args.init_from}, не перенесено {len(loaded.unexpected_keys)} тензоров", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     total_iters = args.iterations
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, total_iters, eta_min=args.lr * 0.05)
