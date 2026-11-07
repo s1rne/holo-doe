@@ -42,7 +42,8 @@ from holo.optics import Setup
 from holo.optimize import device
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_CHECKPOINT = ROOT / "runs" / "neural" / "model.pt"
+DEFAULT_CHECKPOINT = ROOT / "models" / "learned_optimizer.pt"
+DEFAULT_FORWARD = ROOT / "models" / "initializer.pt"
 
 
 def main() -> None:
@@ -51,7 +52,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True, help="папка для doe.png, восстановлений и metrics.json")
     parser.add_argument("--mode", choices=("neural", "fast", "quality"), default="neural")
     parser.add_argument("--checkpoint", type=Path, default=DEFAULT_CHECKPOINT)
-    parser.add_argument("--ff-checkpoint", type=Path, default=None,
+    parser.add_argument("--ff-checkpoint", type=Path, default=DEFAULT_FORWARD,
                         help="чекпойнт прямой сети: начальную фазу даёт она, а не начальная сеть оптимизатора")
     parser.add_argument("--steps", type=int, default=None, help="число шагов сети, по умолчанию как при обучении")
     parser.add_argument("--seeds", type=int, default=None, help="число параллельных стартов")

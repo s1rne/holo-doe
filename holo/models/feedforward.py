@@ -62,7 +62,9 @@ def save_model(model: FeedForwardDOE, config: dict, path) -> None:
 
 
 def load_model(path, device="cpu") -> tuple[FeedForwardDOE, dict]:
-    checkpoint = torch.load(path, map_location=device)
+    """Веса могут лежать в половинной точности: на результат это не влияет, а файл вдвое меньше."""
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
     model = FeedForwardDOE(**checkpoint["config"]).to(device)
-    model.load_state_dict(checkpoint["state"])
+    state = {k: v.float() if v.is_floating_point() else v for k, v in checkpoint["state"].items()}
+    model.load_state_dict(state)
     return model.eval(), checkpoint["config"]
