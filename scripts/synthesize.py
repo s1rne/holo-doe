@@ -19,7 +19,12 @@
   четырёх параллельных стартов выбирается лучший по той же потере, что считает проверка;
 - `fast` — один старт, минимальное время;
 - `quality` — к ответу сети добавляются `--refine` шагов обычного градиентного спуска по фазе.
-  Этот режим уже не является нейросетевым и приводится отдельно.
+  Этот режим уже не нейросетевой и приводится отдельно.
+
+Ключ `--balance` в режиме `quality` включает ограничение на распределение энергии: он запрещает
+решению набирать SSIM за счёт того, что фон после нормировки по максимуму округляется в ноль.
+На изображениях с чёрным фоном это заметно меняет картинку и заметно снижает метрики; разбор и
+числа в docs/neural_method.md.
 """
 
 import argparse
@@ -52,6 +57,11 @@ def main() -> None:
     parser.add_argument("--seeds", type=int, default=None, help="число параллельных стартов")
     parser.add_argument("--refine", type=int, default=None, help="шагов градиентного спуска после сети")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--balance", type=float, default=0.0,
+                        help="вес штрафа за недобор средней яркости; действует в режиме quality. "
+                             "Значение 3 даёт изображения, которые читаются глазом, ценой метрик")
+    parser.add_argument("--balance-floor", type=float, default=0.5,
+                        help="порог средней яркости, ниже которого включается штраф --balance")
     args = parser.parse_args()
 
     names, images = load_targets(args.targets)
@@ -65,13 +75,14 @@ def main() -> None:
         forward_net = load_forward(args.ff_checkpoint, dev)[0]
     torch.manual_seed(args.seed)
     start = time.perf_counter()
+    select = Objective(mean_weight=args.balance, mean_floor=args.balance_floor)
     result = synthesize(model, targets, chirps, args.mode, args.steps, args.seeds, args.refine,
-                        select=Objective(), seed=args.seed, forward_net=forward_net)
+                        select=select, seed=args.seed, forward_net=forward_net)
     seconds = time.perf_counter() - start
     code, recon, metrics = evaluate(result.phase, images)
     extra = {"method": "learned-opt", "mode": args.mode, "steps": result.steps, "refine": result.refine,
              "seconds": seconds, "checkpoint": str(args.checkpoint), "ff_checkpoint": str(args.ff_checkpoint),
-             "device": dev.type}
+             "balance": args.balance, "balance_floor": args.balance_floor, "device": dev.type}
     save(args.out, names, code, recon, metrics, extra)
     for name, cc, ss in zip(names, metrics["cc"], metrics["ssim"]):
         print(f"{name:24} КК {cc:.4f}  ИСС {ss:.4f}")
