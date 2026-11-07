@@ -13,7 +13,8 @@ from holo.baselines import gerchberg_saxton, gradient_descent, random_phase
 from holo.evaluate import evaluate, save
 from holo.io import load_targets
 from holo.models import ComplexField, DeepPrior, FourierMLP, PhaseField, Siren
-from holo.models.learned import LearnedOptimizer
+from holo.models.learned import load_model as load_learned
+from holo.neural import synthesize
 from holo.objective import Objective
 from holo.optics import Setup
 from holo.optimize import Schedule, device, fit
@@ -32,16 +33,13 @@ def gd(steps: int, objective: Objective = EXACT, count: int = 1, lr: float = 0.3
 
 
 def learned(checkpoint: Path, finetune: int):
+    """Обучаемый оптимизатор; подробное сравнение его режимов — в scripts/bench.py."""
     def run(t, c):
-        state = torch.load(checkpoint, map_location="cpu")
-        model = LearnedOptimizer(state["steps"])
-        model.load_state_dict(state["state"])
-        model = model.to(device()).eval()
-        with torch.no_grad():
-            phase = model(restarts(1).float().to(device()), t.float()[None].to(device()), c.to(torch.complex64).to(device()),
-                          Objective(quantize=False))[-1].cpu()
+        model = load_learned(checkpoint, device())
+        chirps = c.to(torch.complex64).to(device())
+        phase = synthesize(model, t, chirps, "fast").phase
         if finetune:
-            phase = fit(PhaseField(phase), t, c, PLAIN, Schedule(finetune, 0.5, quantize_from=0.5)).phase
+            phase = fit(PhaseField(phase[None]), t, c, PLAIN, Schedule(finetune, 0.5, quantize_from=0.5)).phase
         return phase.reshape(128, 128)
     return run
 
@@ -98,8 +96,8 @@ def main() -> None:
     args = parser.parse_args()
     methods = dict(METHODS)
     if args.learned:
-        methods["learned-opt 16 шагов"] = learned(args.learned, 0)
-        methods["learned-opt 16 + gd-exact 500"] = learned(args.learned, 500)
+        methods["learned-opt (сеть)"] = learned(args.learned, 0)
+        methods["learned-opt (сеть) + gd-exact 500"] = learned(args.learned, 500)
     if args.methods:
         methods = {k: v for k, v in methods.items() if any(m in k for m in args.methods)}
     chirps = Setup().chirps()

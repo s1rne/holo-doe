@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import torch
 
-from .losses import pearson, ssim
+from .losses import pearson, speckle_excess, ssim
 from .optics import to_unit
 from .optics import reconstruct as field_image
 
@@ -58,6 +58,25 @@ class Objective:
     modes: tuple[str, ...] = ("amplitude",)
     peak_power: float = 0.0
     dim_weight: float = 0.0
+    worst_weight: float = 1.0
+    """Доля мягкого минимума в сумме по плоскостям при softmin > 0; остальное — обычное среднее."""
+    speckle_weight: float = 0.0
+    """Вес штрафа за спекл: превышение локального СКО восстановления над локальным СКО цели.
+
+    Ручка гладкости решения, независимая от вырожденного яркого пика. Гладкая фаза в плоскости
+    восстановления поднимает SSIM честно, без затемнения фона; ценой части КК."""
+    mean_weight: float = 0.0
+    """Вес штрафа за недобор средней яркости: relu(mean_floor − mean(recon)/mean(target)) по плоскости.
+
+    Обратный по смыслу к dim_weight. Нормировка по максимуму делает выгодным вырожденное решение:
+    часть энергии уходит в один яркий пик, фон после деления на максимум падает ниже половины
+    младшего разряда и округляется ровно в ноль, окна ИСС на фоне совпадают с целью. Метрика это
+    засчитывает, но изображение выглядит хуже. Штраф требует, чтобы отношение максимума к средней
+    яркости восстановления не превышало того же отношения у цели, и запрещает этот обход."""
+    mean_floor: float = 1.0
+    """Порог, ниже которого включается штраф mean_weight. При 1 штрафуется любой недобор яркости,
+    в том числе безобидный: у честного решения на фотографии отношение около 0,8, и штраф съедает
+    качество зря. Порог 0,5–0,6 оставляет такие решения в покое и бьёт только по вырожденным."""
 
     def scores(self, phase: torch.Tensor, chirps: torch.Tensor, targets: torch.Tensor, mode: str = "amplitude"):
         recon = reconstruct(phase, chirps, mode, self.quantize, self.peak_power)
@@ -72,9 +91,15 @@ class Objective:
             score = (cc + self.ssim_weight * ss) / (1 + self.ssim_weight)
             if self.dim_weight:
                 score = score - self.dim_weight * recon.mean((-2, -1))
+            if self.speckle_weight:
+                score = score - self.speckle_weight * speckle_excess(recon, targets.expand_as(recon))
+            if self.mean_weight:
+                ratio = recon.mean((-2, -1)) / targets.expand_as(recon).mean((-2, -1)).clamp_min(1e-6)
+                score = score - self.mean_weight * (self.mean_floor - ratio).clamp_min(0)
             if self.softmin > 0:
                 n = torch.tensor(score.shape[-1], dtype=score.dtype).log()
-                score = -self.softmin * (torch.logsumexp(-score / self.softmin, dim=-1) - n)
+                soft = -self.softmin * (torch.logsumexp(-score / self.softmin, dim=-1) - n)
+                score = (1 - self.worst_weight) * score.mean(-1) + self.worst_weight * soft
             else:
                 score = score.mean(-1)
             losses.append(1 - score)

@@ -11,6 +11,15 @@ from torch import nn
 from .objective import Objective
 
 
+def synchronize(dev: torch.device) -> None:
+    """Дождаться конца работы ускорителя: и CUDA, и MPS ставят операции в очередь, без этого
+    измеренное время показывает постановку в очередь, а не счёт."""
+    if dev.type == "cuda":
+        torch.cuda.synchronize()
+    elif dev.type == "mps":
+        torch.mps.synchronize()
+
+
 def device() -> torch.device:
     if torch.cuda.is_available():
         return torch.device("cuda")
@@ -86,6 +95,5 @@ def fit(model: nn.Module, targets: torch.Tensor, chirps: torch.Tensor, objective
             best_loss = torch.where(better, final, best_loss)
             best_phase[better] = phase[better]
         index = int(best_loss.argmin())
-    if dev.type == "mps":
-        torch.mps.synchronize()
+    synchronize(dev)
     return Result(best_phase[index].cpu().double(), float(best_loss[index]), time.perf_counter() - start, step)

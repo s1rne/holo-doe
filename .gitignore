@@ -6,3 +6,6 @@ runs/
 outputs/
 *.ckpt
 *.pt
+!models/*.pt
+data/raw/
+data/cache/
