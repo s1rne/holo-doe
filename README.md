@@ -11,7 +11,9 @@ PYTHONPATH=. uv run python scripts/synthesize.py <папка с 4 PNG> --out <п
 
 В выходной папке: `doe.png` (128×128, 8 бит, один канал, 0 → −π, 255 → +π), четыре восстановления `recon_<имя>_<z>mm.png` и `metrics.json` с коэффициентом корреляции Пирсона и индексом структурного сходства по каждой паре. Изображения сопоставляются плоскостям в порядке сортировки имён файлов.
 
-Режимы: `--mode neural` (по умолчанию, целиком нейросетевой), `--mode fast` (один старт), `--mode quality` (ответ сети плюс шаги обычного градиентного спуска, уже не нейросетевой). Метод, архитектура и измерения: [docs/neural_method.md](docs/neural_method.md).
+Веса лежат в `models/`: `learned_optimizer.pt` (обучаемый оптимизатор, 0,6 МБ) и `initializer.pt` (сеть начальной фазы, 62 МБ). Других файлов для запуска не нужно.
+
+Режимы: `--mode neural` (по умолчанию, целиком нейросетевой, 0,2 с на сцену), `--mode fast` (восемь шагов вместо 32), `--mode quality` (ответ сети плюс шаги обычного градиентного спуска; этот режим уже не нейросетевой). Ключ `--balance 3` в режиме `quality` запрещает решению набирать SSIM за счёт затемнения фона: на бинарных изображениях картинка становится читаемой, метрики падают. Метод, архитектура и измерения: [docs/neural_method.md](docs/neural_method.md).
 
 ## Воспроизведение
 
@@ -19,8 +21,9 @@ PYTHONPATH=. uv run python scripts/synthesize.py <папка с 4 PNG> --out <п
 uv run python scripts/make_targets.py
 PYTHONPATH=. uv run python scripts/make_heldout.py
 PYTHONPATH=. uv run python scripts/make_dataset.py          # банки обучения в data/cache
-PYTHONPATH=. uv run python scripts/train_learned_optimizer.py --iterations 5000 --out runs/base
-PYTHONPATH=. uv run python scripts/bench.py data/targets/* data/heldout/* --checkpoint runs/base/model.pt
+PYTHONPATH=. uv run python scripts/train_learned_optimizer.py --iterations 2400 --ff-init models/initializer.pt --out runs/main
+PYTHONPATH=. uv run python scripts/bench.py data/targets/* data/heldout/* \
+    --checkpoint models/learned_optimizer.pt --ff-checkpoint models/initializer.pt --ff-init
 PYTHONPATH=. uv run python scripts/per_instance.py data/targets/photos data/targets/glyphs data/targets/extra
 ```
 
