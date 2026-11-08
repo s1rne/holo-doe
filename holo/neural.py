@@ -60,9 +60,10 @@ def neural_phase(model: LearnedOptimizer, targets: torch.Tensor, chirps: torch.T
 def synthesize(model: LearnedOptimizer, targets: torch.Tensor, chirps: torch.Tensor, mode: str = "neural",
                steps: int | None = None, seeds: int | None = None, refine: int | None = None,
                refine_lr: float = 0.2, select: Objective = Objective(), seed: int = 0,
-               use_init: bool = True, forward_net: FeedForwardDOE | None = None) -> Synthesis:
+               use_init: bool = True, forward_net: FeedForwardDOE | None = None,
+               two_stage: bool = False) -> Synthesis:
     """targets (P, N, N) в 0..1 на любом устройстве; chirps уже на нужном устройстве в complex64."""
-    presets = {"fast": (8, 1, 0), "neural": (None, 1, 0), "quality": (None, 1, 500)}
+    presets = {"fast": (8, 1, 0), "neural": (None, 1, 0), "quality": (None, 1, 2000)}
     if mode not in presets:
         raise ValueError(f"режим {mode}: ожидается один из {sorted(presets)}")
     default_steps, default_seeds, default_refine = presets[mode]
@@ -72,6 +73,12 @@ def synthesize(model: LearnedOptimizer, targets: torch.Tensor, chirps: torch.Ten
     start = time.perf_counter()
     phase, loss = neural_phase(model, targets, chirps, steps, seeds, select, seed, use_init, forward_net)
     used = steps if steps is not None else model.steps
+    if two_stage and refine:
+        first = Objective(quantize=select.quantize, modes=("amplitude",))
+        result = fit(PhaseField(phase[None]), targets, chirps, first,
+                     Schedule(refine // 2, refine_lr, quantize_from=0.5))
+        phase, loss = result.phase, result.loss
+        refine -= refine // 2
     if refine:
         result = fit(PhaseField(phase[None]), targets, chirps, select,
                      Schedule(refine, refine_lr, quantize_from=0.5))
