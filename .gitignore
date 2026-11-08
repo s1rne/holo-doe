@@ -9,3 +9,5 @@ outputs/
 !models/*.pt
 data/raw/
 data/cache/
+
+*.log
