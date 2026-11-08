@@ -11,4 +11,4 @@ COPY models ./models
 ENV PYTHONPATH=/app PYTHONUNBUFFERED=1 OMP_NUM_THREADS=4
 
 # docker run --rm -v <папка с 4 PNG>:/in -v <папка результата>:/out holo-doe
-ENTRYPOINT ["python", "scripts/synthesize.py", "/in", "--out", "/out"]
+ENTRYPOINT ["python", "scripts/synthesize.py", "/in", "--out", "/out", "--mode", "quality"]
