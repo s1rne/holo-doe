@@ -61,6 +61,11 @@ def main() -> None:
     parser.add_argument("--balance", type=float, default=0.0,
                         help="вес штрафа за недобор средней яркости; действует в режиме quality. "
                              "Значение 3 даёт изображения, которые читаются глазом, ценой метрик")
+    parser.add_argument("--modes", nargs="+", default=["amplitude"], choices=["amplitude", "intensity"],
+                        help="по каким определениям восстановления усредняется потеря доводки; обе: "
+                             "страховка на случай, если проверка считает по |K|²")
+    parser.add_argument("--intensity-weight", type=float, default=0.0,
+                        help="вес определения |K|² относительно |K| (вес 1) при доводке; 0 выключает страховку")
     parser.add_argument("--balance-floor", type=float, default=0.5,
                         help="порог средней яркости, ниже которого включается штраф --balance")
     args = parser.parse_args()
@@ -76,7 +81,11 @@ def main() -> None:
         forward_net = load_forward(args.ff_checkpoint, dev)[0]
     torch.manual_seed(args.seed)
     start = time.perf_counter()
-    select = Objective(mean_weight=args.balance, mean_floor=args.balance_floor)
+    modes = tuple(args.modes)
+    weights = ()
+    if args.intensity_weight > 0:
+        modes, weights = ("amplitude", "intensity"), (1.0, args.intensity_weight)
+    select = Objective(mean_weight=args.balance, mean_floor=args.balance_floor, modes=modes, mode_weights=weights)
     result = synthesize(model, targets, chirps, args.mode, args.steps, args.seeds, args.refine,
                         select=select, seed=args.seed, forward_net=forward_net)
     seconds = time.perf_counter() - start
