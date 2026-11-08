@@ -1,5 +1,7 @@
 # holo-doe
 
+[Презентация](https://docs.google.com/presentation/d/1udGoxqMK2GqmHGSYw15OSFMGjVRT_toSRgHCKDAmcwQ/edit?usp=sharing)
+
 Нейросетевой синтез фазового дифракционного оптического элемента. Один ДОЭ 128×128 восстанавливает четыре изображения на расстояниях 24,1; 25,3; 26,5 и 27,7 мм. Длина волны 532 нм, пиксель ПВМС 10 мкм. Условие задачи: [docs/task.pdf](docs/task.pdf).
 
 ## Запуск в Docker
