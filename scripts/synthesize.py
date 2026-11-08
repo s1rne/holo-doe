@@ -64,10 +64,16 @@ def main() -> None:
     parser.add_argument("--modes", nargs="+", default=["amplitude"], choices=["amplitude", "intensity"],
                         help="по каким определениям восстановления усредняется потеря доводки; обе: "
                              "страховка на случай, если проверка считает по |K|²")
-    parser.add_argument("--intensity-weight", type=float, default=0.0,
-                        help="вес определения |K|² относительно |K| (вес 1) при доводке; 0 выключает страховку")
+    parser.add_argument("--intensity-weight", type=float, default=0.5,
+                        help="вес определения |K|² относительно |K| (вес 1) при доводке; 0 выключает страховку. "
+                             "По умолчанию 0.5: измерения на 6 наборах показали, что это поднимает ИСС и по амплитуде, "
+                             "и по интенсивности (docs/robust_refine.md)")
     parser.add_argument("--balance-floor", type=float, default=0.5,
                         help="порог средней яркости, ниже которого включается штраф --balance")
+    parser.add_argument("--peak-power", type=float, default=0.0,
+                        help="степень мягкого максимума при нормировке восстановления в потере доводки: "
+                             "0 — жёсткий максимум (как в проверке), выше — градиент получают все яркие пиксели, "
+                             "а не только argmax")
     args = parser.parse_args()
 
     names, images = load_targets(args.targets)
@@ -85,14 +91,16 @@ def main() -> None:
     weights = ()
     if args.intensity_weight > 0:
         modes, weights = ("amplitude", "intensity"), (1.0, args.intensity_weight)
-    select = Objective(mean_weight=args.balance, mean_floor=args.balance_floor, modes=modes, mode_weights=weights)
+    select = Objective(mean_weight=args.balance, mean_floor=args.balance_floor, modes=modes, mode_weights=weights,
+                       peak_power=args.peak_power)
     result = synthesize(model, targets, chirps, args.mode, args.steps, args.seeds, args.refine,
                         select=select, seed=args.seed, forward_net=forward_net)
     seconds = time.perf_counter() - start
     code, recon, metrics = evaluate(result.phase, images)
     extra = {"method": "learned-opt", "mode": args.mode, "steps": result.steps, "refine": result.refine,
              "seconds": seconds, "checkpoint": str(args.checkpoint), "ff_checkpoint": str(args.ff_checkpoint),
-             "balance": args.balance, "balance_floor": args.balance_floor, "device": dev.type}
+             "balance": args.balance, "balance_floor": args.balance_floor, "device": dev.type,
+             "modes": list(modes), "intensity_weight": args.intensity_weight, "peak_power": args.peak_power}
     save(args.out, names, code, recon, metrics, extra)
     for name, cc, ss in zip(names, metrics["cc"], metrics["ssim"]):
         print(f"{name:24} КК {cc:.4f}  ИСС {ss:.4f}")
