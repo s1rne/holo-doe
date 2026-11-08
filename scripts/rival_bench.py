@@ -159,7 +159,23 @@ def ours_w50_r2000(folder, out):
     return ours(folder, out, "quality", ("--intensity-weight", "0.5", "--refine", "2000"))
 
 
-RIVALS = {"ours_w50_r2000": ours_w50_r2000, "ours_w50_r250": ours_w50_r250, "ours_w50_r1000": ours_w50_r1000, "ours_w50": ours_w50, "ours_w15": ours_w15, "ours_w30": ours_w30, "ours_robust": ours_robust, "doesynth": doesynth, "ours_neural": ours, "ours_quality": ours_quality, "meefee": meefee, "donn_best": donn, "donn_fast": donn_fast, "donn_balanced": donn_balanced, "donn_max": donn_max, "fourplane": fourplane, "fourplane_fast": fourplane_fast,
+def ours_w0_r1000(folder, out):
+    return ours(folder, out, "quality", ("--intensity-weight", "0", "--refine", "1000"))
+
+
+def ours_w0_r2000(folder, out):
+    return ours(folder, out, "quality", ("--intensity-weight", "0", "--refine", "2000"))
+
+
+def ours_w30_r1000(folder, out):
+    return ours(folder, out, "quality", ("--intensity-weight", "0.3", "--refine", "1000"))
+
+
+def ours_w50_r1000_pp4(folder, out):
+    return ours(folder, out, "quality", ("--intensity-weight", "0.5", "--refine", "1000", "--peak-power", "4"))
+
+
+RIVALS = {"ours_w0_r1000": ours_w0_r1000, "ours_w0_r2000": ours_w0_r2000, "ours_w30_r1000": ours_w30_r1000, "ours_w50_r1000_pp4": ours_w50_r1000_pp4, "ours_w50_r2000": ours_w50_r2000, "ours_w50_r250": ours_w50_r250, "ours_w50_r1000": ours_w50_r1000, "ours_w50": ours_w50, "ours_w15": ours_w15, "ours_w30": ours_w30, "ours_robust": ours_robust, "doesynth": doesynth, "ours_neural": ours, "ours_quality": ours_quality, "meefee": meefee, "donn_best": donn, "donn_fast": donn_fast, "donn_balanced": donn_balanced, "donn_max": donn_max, "fourplane": fourplane, "fourplane_fast": fourplane_fast,
           "mvp": mvp, "pinn": pinn, "pinn_nolens": pinn_nolens}
 
 

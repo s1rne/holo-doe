@@ -74,6 +74,9 @@ def main() -> None:
                         help="степень мягкого максимума при нормировке восстановления в потере доводки: "
                              "0 — жёсткий максимум (как в проверке), выше — градиент получают все яркие пиксели, "
                              "а не только argmax")
+    parser.add_argument("--two-stage", action="store_true",
+                        help="двухэтапная доводка: первая половина шагов только по амплитуде |K| (Пирсон растёт "
+                             "быстрее), вторая половина с той же страховкой |K|², что и в одноэтапном режиме")
     args = parser.parse_args()
 
     names, images = load_targets(args.targets)
@@ -94,13 +97,15 @@ def main() -> None:
     select = Objective(mean_weight=args.balance, mean_floor=args.balance_floor, modes=modes, mode_weights=weights,
                        peak_power=args.peak_power)
     result = synthesize(model, targets, chirps, args.mode, args.steps, args.seeds, args.refine,
-                        select=select, seed=args.seed, forward_net=forward_net)
+                        select=select, seed=args.seed, forward_net=forward_net,
+                        two_stage=args.two_stage)
     seconds = time.perf_counter() - start
     code, recon, metrics = evaluate(result.phase, images)
     extra = {"method": "learned-opt", "mode": args.mode, "steps": result.steps, "refine": result.refine,
              "seconds": seconds, "checkpoint": str(args.checkpoint), "ff_checkpoint": str(args.ff_checkpoint),
              "balance": args.balance, "balance_floor": args.balance_floor, "device": dev.type,
-             "modes": list(modes), "intensity_weight": args.intensity_weight, "peak_power": args.peak_power}
+             "modes": list(modes), "intensity_weight": args.intensity_weight, "peak_power": args.peak_power,
+             "two_stage": args.two_stage}
     save(args.out, names, code, recon, metrics, extra)
     for name, cc, ss in zip(names, metrics["cc"], metrics["ssim"]):
         print(f"{name:24} КК {cc:.4f}  ИСС {ss:.4f}")
